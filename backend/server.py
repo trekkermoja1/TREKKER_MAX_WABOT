@@ -153,46 +153,31 @@ async def create_instance(request: CreateInstanceRequest):
     data[instance_id] = instance_data
     save_db(data)
     
-    # Start the bot instance
-    try:
-        bot_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'bot')
-        process = subprocess.Popen(
-            ['node', 'instance.js', instance_id, request.phone_number, str(port)],
-            cwd=bot_dir,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
-        
-        bot_processes[instance_id] = process
-        instance_ports[instance_id] = port
-        
-        data = load_db()
-        data[instance_id]["status"] = "running"
-        data[instance_id]["pid"] = process.pid
-        save_db(data)
-        
-        # Wait a bit for the instance to start and generate pairing code
-        await asyncio.sleep(5)
-        
-        # Get pairing code
-        status = await get_instance_status(instance_id, port)
-        
-        return InstanceResponse(
-            id=instance_id,
-            name=request.name,
-            phone_number=request.phone_number,
-            status=status.get("status", "starting"),
-            created_at=instance_data["created_at"],
-            pairing_code=status.get("pairingCode")
-        )
-        
-    except Exception as e:
-        data = load_db()
-        if instance_id in data:
-            data[instance_id]["status"] = "error"
-            data[instance_id]["error"] = str(e)
-            save_db(data)
-        raise HTTPException(status_code=500, detail=f"Failed to start instance: {str(e)}")
+    # Start the bot instance in background to avoid timeout
+    bot_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'bot')
+    process = subprocess.Popen(
+        ['node', 'instance.js', instance_id, request.phone_number, str(port)],
+        cwd=bot_dir,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE
+    )
+    
+    bot_processes[instance_id] = process
+    instance_ports[instance_id] = port
+    
+    data = load_db()
+    data[instance_id]["status"] = "starting"
+    data[instance_id]["pid"] = process.pid
+    save_db(data)
+    
+    return InstanceResponse(
+        id=instance_id,
+        name=request.name,
+        phone_number=request.phone_number,
+        status="starting",
+        created_at=instance_data["created_at"],
+        pairing_code=None
+    )
 
 
 @app.get("/api/instances")
