@@ -107,7 +107,7 @@ app.add_middleware(
 
 # Serve static files from the frontend build
 if os.path.exists("static"):
-    app.mount("/static", StaticFiles(directory="static"), name="static")
+    app.mount("/_static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")
 async def serve_index():
@@ -118,15 +118,17 @@ async def serve_frontend(full_path: str):
     if full_path.startswith("api"):
         raise HTTPException(status_code=404)
     
-    # Check if the file exists in static root or static/static
+    # Try serving from the static root
     file_path = os.path.join("static", full_path)
     if os.path.isfile(file_path):
         return FileResponse(file_path)
     
-    # Try static/static (for CRA build structure)
-    static_file_path = os.path.join("static/static", full_path)
-    if os.path.isfile(static_file_path):
-        return FileResponse(static_file_path)
+    # Map /static/... to static/static/...
+    if full_path.startswith("static/"):
+        relative_path = full_path[len("static/"):]
+        static_sub_path = os.path.join("static/static", relative_path)
+        if os.path.isfile(static_sub_path):
+            return FileResponse(static_sub_path)
         
     return FileResponse("static/index.html")
 
