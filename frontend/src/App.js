@@ -210,8 +210,14 @@ const PairingModal = ({ instance, onClose, onRefresh }) => {
       const response = await fetch(`${BACKEND_URL}/api/instances/${instance.id}/pairing-code`);
       const data = await response.json();
       setPairingData(data);
-      // Only set expired if we have no code AND no pending status
-      setExpired(!data.pairing_code && data.status !== 'waiting_for_pairing' && data.status !== 'connecting');
+      
+      // Improved expiration logic: 
+      // 1. If we have a code and it's explicitly valid, not expired.
+      // 2. If we are in a pending state (waiting_for_pairing, connecting, requesting_code), not expired.
+      // 3. Only show expired if we have no code AND we are not in a starting/connecting state.
+      const isPending = ['waiting_for_pairing', 'connecting', 'requesting_code', 'starting', 'regenerating'].includes(data.status);
+      setExpired(!data.pairing_code && !isPending);
+      
     } catch (err) {
       console.error('Error fetching pairing code:', err);
     } finally {
@@ -223,6 +229,7 @@ const PairingModal = ({ instance, onClose, onRefresh }) => {
     if (!instance) return;
     setRegenerating(true);
     setExpired(false);
+    setPairingData(prev => prev ? { ...prev, status: 'regenerating', pairing_code: null } : null);
     try {
       const response = await fetch(`${BACKEND_URL}/api/instances/${instance.id}/regenerate-code`, {
         method: 'POST'
